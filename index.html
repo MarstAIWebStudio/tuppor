@@ -1,0 +1,2296 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>더클래용 투표 시스템</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;900&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+<!-- ======================================================
+     🔥 FIREBASE 설정 안내
+     아래 firebaseConfig 객체의 값들을 본인의 Firebase 프로젝트 값으로 교체하세요.
+
+     설정 방법:
+     1. https://console.firebase.google.com 접속
+     2. 새 프로젝트 생성 (또는 기존 프로젝트 선택)
+     3. 프로젝트 설정 > 일반 탭 > "앱 추가" > 웹앱(</>)
+     4. 표시된 firebaseConfig 값을 아래에 붙여넣기
+     5. Authentication > 로그인 방법 > Google 활성화
+     6. Realtime Database > 데이터베이스 만들기 (테스트 모드로 시작)
+     7. Realtime Database 규칙 탭에서 아래 규칙 붙여넣기:
+     {
+       "rules": {
+         "rooms": {
+           ".read": "auth != null",
+           "$roomId": {
+             ".write": "auth != null",
+             "votes": {
+               "$pollId": {
+                 "$uid": {
+                   ".write": "auth != null && $uid === auth.uid"
+                 }
+               }
+             }
+           }
+         }
+       }
+     }
+     ====================================================== -->
+
+<style>
+  :root {
+    --green-50: #f0fdf4;
+    --green-100: #dcfce7;
+    --green-200: #bbf7d0;
+    --green-300: #86efac;
+    --green-400: #4ade80;
+    --green-500: #22c55e;
+    --green-600: #16a34a;
+    --green-700: #15803d;
+    --green-800: #166534;
+    --green-900: #14532d;
+    --primary: #2ECC71;
+    --primary-dark: #27AE60;
+    --primary-deeper: #219a52;
+    --accent: #1abc9c;
+    --surface: #ffffff;
+    --surface-2: #f8fffe;
+    --surface-3: #f0fdf4;
+    --border: #e2f5ea;
+    --border-strong: #bbf7d0;
+    --text-primary: #0f2318;
+    --text-secondary: #3d6b4f;
+    --text-muted: #7aab8a;
+    --shadow-sm: 0 1px 3px rgba(22,163,74,0.08), 0 1px 2px rgba(22,163,74,0.06);
+    --shadow-md: 0 4px 16px rgba(22,163,74,0.1), 0 2px 6px rgba(22,163,74,0.07);
+    --shadow-lg: 0 12px 40px rgba(22,163,74,0.15), 0 4px 16px rgba(22,163,74,0.08);
+    --shadow-xl: 0 24px 64px rgba(22,163,74,0.2);
+    --radius-sm: 8px;
+    --radius: 14px;
+    --radius-lg: 20px;
+    --radius-xl: 28px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Noto Sans KR', sans-serif;
+    background: var(--surface-2);
+    color: var(--text-primary);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--green-300); border-radius: 99px; }
+
+  /* ══════════════════════════════════════════
+     LANDING PAGE
+  ══════════════════════════════════════════ */
+  #landing {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background:
+      radial-gradient(ellipse 80% 60% at 50% -10%, rgba(46,204,113,0.18) 0%, transparent 70%),
+      radial-gradient(ellipse 60% 40% at 90% 80%, rgba(26,188,156,0.10) 0%, transparent 60%),
+      linear-gradient(160deg, #f0fdf4 0%, #f8fffe 50%, #ecfdf5 100%);
+    padding: 40px 20px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  #landing::before {
+    content: '';
+    position: absolute;
+    top: -80px; right: -80px;
+    width: 400px; height: 400px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(46,204,113,0.10) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  #landing::after {
+    content: '';
+    position: absolute;
+    bottom: -60px; left: -60px;
+    width: 300px; height: 300px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(26,188,156,0.08) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .landing-card {
+    background: white;
+    border-radius: var(--radius-xl);
+    padding: 56px 52px;
+    max-width: 460px;
+    width: 100%;
+    box-shadow: var(--shadow-xl);
+    border: 1.5px solid var(--border);
+    text-align: center;
+    position: relative;
+    z-index: 1;
+    animation: fadeInUp 0.7s cubic-bezier(0.22,1,0.36,1) both;
+  }
+
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(32px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .landing-logo {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 72px; height: 72px;
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    border-radius: 20px;
+    margin-bottom: 24px;
+    box-shadow: 0 8px 24px rgba(46,204,113,0.35);
+  }
+
+  .landing-logo svg { width: 36px; height: 36px; fill: white; }
+
+  .landing-title {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    line-height: 1.15;
+    margin-bottom: 8px;
+  }
+
+  .landing-title span {
+    background: linear-gradient(120deg, var(--primary), var(--accent));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .landing-sub {
+    font-size: 0.95rem;
+    color: var(--text-muted);
+    margin-bottom: 36px;
+    line-height: 1.6;
+  }
+
+  .btn-google {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    width: 100%;
+    padding: 15px 24px;
+    background: white;
+    border: 2px solid var(--border-strong);
+    border-radius: var(--radius);
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: 'Noto Sans KR', sans-serif;
+  }
+  .btn-google:hover {
+    border-color: var(--primary);
+    background: var(--green-50);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+  }
+  .btn-google:active { transform: translateY(0); }
+  .btn-google svg { width: 20px; height: 20px; flex-shrink: 0; }
+
+  .landing-badge {
+    margin-top: 28px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    background: var(--green-50);
+    border: 1px solid var(--border);
+    padding: 6px 14px;
+    border-radius: 99px;
+  }
+  .landing-badge::before {
+    content: '🔒';
+    font-size: 0.85rem;
+  }
+
+  /* ══════════════════════════════════════════
+     MAIN APP LAYOUT
+  ══════════════════════════════════════════ */
+  #app { display: none; min-height: 100vh; flex-direction: column; }
+  #app.visible { display: flex; }
+
+  /* ── HEADER ── */
+  .app-header {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(255,255,255,0.92);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1.5px solid var(--border);
+    padding: 0 24px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .header-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .header-logo-icon {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 3px 10px rgba(46,204,113,0.3);
+  }
+  .header-logo-icon svg { width: 18px; height: 18px; fill: white; }
+
+  .header-logo-text {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: var(--text-primary);
+  }
+  .header-logo-text span {
+    color: var(--primary-dark);
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .btn-invite-code {
+    display: flex; align-items: center; gap: 7px;
+    padding: 8px 16px;
+    background: var(--green-50);
+    border: 1.5px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--primary-dark);
+    cursor: pointer;
+    transition: all 0.18s;
+    font-family: 'Noto Sans KR', sans-serif;
+    white-space: nowrap;
+  }
+  .btn-invite-code:hover {
+    background: var(--green-100);
+    border-color: var(--primary);
+  }
+  .btn-invite-code svg { width: 14px; height: 14px; }
+
+  .user-chip {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 14px 6px 6px;
+    background: var(--surface-3);
+    border: 1.5px solid var(--border);
+    border-radius: 99px;
+    cursor: pointer;
+    transition: all 0.18s;
+    position: relative;
+  }
+  .user-chip:hover { border-color: var(--primary); }
+
+  .user-avatar {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: white;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .user-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+  .user-name {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    max-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .user-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    background: white;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 6px;
+    min-width: 160px;
+    box-shadow: var(--shadow-lg);
+    display: none;
+    z-index: 200;
+  }
+  .user-chip.open .user-dropdown { display: block; }
+
+  .dropdown-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 9px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .dropdown-item:hover { background: var(--green-50); color: var(--primary-dark); }
+  .dropdown-item.danger { color: #e74c3c; }
+  .dropdown-item.danger:hover { background: #fef2f2; }
+  .dropdown-item svg { width: 15px; height: 15px; }
+
+  /* ── MAIN CONTENT ── */
+  .main-content {
+    flex: 1;
+    max-width: 1100px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 36px 24px 60px;
+  }
+
+  /* ── VIEWS ── */
+  .view { display: none; animation: fadeIn 0.3s ease; }
+  .view.active { display: block; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* ══════════════════════════════════════════
+     HOME VIEW - ROOMS LIST
+  ══════════════════════════════════════════ */
+  .page-header {
+    margin-bottom: 28px;
+  }
+  .page-title {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+  }
+  .page-sub {
+    font-size: 0.88rem;
+    color: var(--text-muted);
+  }
+
+  .rooms-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+  }
+
+  /* Create room card */
+  .room-card-create {
+    border: 2.5px dashed var(--border-strong);
+    border-radius: var(--radius-lg);
+    padding: 28px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    cursor: pointer;
+    transition: all 0.22s ease;
+    background: var(--green-50);
+    min-height: 160px;
+    color: var(--text-muted);
+  }
+  .room-card-create:hover {
+    border-color: var(--primary);
+    background: var(--green-100);
+    color: var(--primary-dark);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+  }
+  .room-card-create .create-icon {
+    width: 44px; height: 44px;
+    background: white;
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: var(--shadow-sm);
+    transition: all 0.22s;
+  }
+  .room-card-create:hover .create-icon {
+    background: var(--primary);
+    box-shadow: 0 4px 14px rgba(46,204,113,0.35);
+  }
+  .room-card-create:hover .create-icon svg { fill: white; }
+  .room-card-create .create-icon svg { width: 22px; height: 22px; fill: var(--text-muted); transition: fill 0.22s; }
+  .room-card-create span { font-size: 0.88rem; font-weight: 600; }
+
+  /* Room card */
+  .room-card {
+    background: white;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 22px;
+    cursor: pointer;
+    transition: all 0.22s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  .room-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--primary), var(--accent));
+    opacity: 0;
+    transition: opacity 0.22s;
+  }
+  .room-card:hover {
+    border-color: var(--green-300);
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-md);
+  }
+  .room-card:hover::before { opacity: 1; }
+
+  .room-card-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 14px;
+    gap: 8px;
+  }
+
+  .room-card-icon {
+    width: 42px; height: 42px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, var(--green-100), var(--green-200));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.2rem;
+    flex-shrink: 0;
+  }
+
+  .room-badge {
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: 99px;
+    letter-spacing: 0.03em;
+  }
+  .room-badge.public { background: var(--green-100); color: var(--primary-dark); }
+  .room-badge.private { background: #fff3cd; color: #92600a; }
+
+  .room-card-name {
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+    line-height: 1.3;
+  }
+
+  .room-card-meta {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .room-card-meta-item {
+    display: flex; align-items: center; gap: 4px;
+  }
+  .room-card-meta-item svg { width: 12px; height: 12px; }
+
+  .empty-state {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-muted);
+  }
+  .empty-state-icon { font-size: 3rem; margin-bottom: 12px; }
+  .empty-state p { font-size: 0.9rem; }
+
+  /* ══════════════════════════════════════════
+     ROOM VIEW
+  ══════════════════════════════════════════ */
+  .room-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 28px;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .room-header-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .btn-back {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 14px;
+    background: white;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.18s;
+    font-family: 'Noto Sans KR', sans-serif;
+  }
+  .btn-back:hover { border-color: var(--primary); color: var(--primary-dark); }
+  .btn-back svg { width: 14px; height: 14px; }
+
+  .room-title-group h2 {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: var(--text-primary);
+  }
+
+  .room-title-group p {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+
+  .room-header-actions {
+    display: flex; gap: 8px;
+  }
+
+  /* Buttons */
+  .btn-primary {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 10px 20px;
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    color: white;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 0.87rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: 'Noto Sans KR', sans-serif;
+    box-shadow: 0 3px 10px rgba(46,204,113,0.3);
+    white-space: nowrap;
+  }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(46,204,113,0.4); }
+  .btn-primary:active { transform: translateY(0); }
+  .btn-primary svg { width: 15px; height: 15px; }
+
+  .btn-secondary {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 10px 18px;
+    background: white;
+    color: var(--text-secondary);
+    border: 1.5px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    font-size: 0.87rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.18s;
+    font-family: 'Noto Sans KR', sans-serif;
+    white-space: nowrap;
+  }
+  .btn-secondary:hover { border-color: var(--primary); color: var(--primary-dark); background: var(--green-50); }
+  .btn-secondary svg { width: 15px; height: 15px; }
+
+  .btn-danger {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 9px 16px;
+    background: #fef2f2;
+    color: #e74c3c;
+    border: 1.5px solid #fecaca;
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.18s;
+    font-family: 'Noto Sans KR', sans-serif;
+  }
+  .btn-danger:hover { background: #fee2e2; border-color: #f87171; }
+  .btn-danger svg { width: 14px; height: 14px; }
+
+  /* Polls grid */
+  .polls-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  /* Poll card */
+  .poll-card {
+    background: white;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow 0.2s;
+  }
+  .poll-card:hover { box-shadow: var(--shadow-md); }
+
+  .poll-card-header {
+    padding: 20px 24px 16px;
+    border-bottom: 1.5px solid var(--border);
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .poll-card-title-group h3 {
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+  }
+  .poll-card-title-group p {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+  }
+
+  .poll-status {
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 99px;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .poll-status.active { background: var(--green-100); color: var(--primary-dark); }
+  .poll-status.closed { background: #f1f5f9; color: #64748b; }
+
+  .poll-card-body { padding: 20px 24px; }
+
+  /* Candidate items */
+  .candidates-list { display: flex; flex-direction: column; gap: 10px; }
+
+  .candidate-item {
+    position: relative;
+  }
+
+  .candidate-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--green-50);
+    border: 2px solid transparent;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: 'Noto Sans KR', sans-serif;
+    text-align: left;
+  }
+  .candidate-btn:hover:not(:disabled) {
+    border-color: var(--primary);
+    background: var(--green-100);
+    transform: translateX(3px);
+  }
+  .candidate-btn:disabled { cursor: not-allowed; opacity: 0.9; }
+  .candidate-btn.voted {
+    background: linear-gradient(135deg, var(--green-100), var(--green-50));
+    border-color: var(--primary);
+  }
+
+  .candidate-num {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: white;
+    border: 2px solid var(--border-strong);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+    transition: all 0.2s;
+  }
+  .candidate-btn.voted .candidate-num {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white;
+  }
+
+  .candidate-name {
+    flex: 1;
+    font-weight: 600;
+    font-size: 0.92rem;
+    color: var(--text-primary);
+  }
+
+  .candidate-vote-badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--primary-dark);
+    background: white;
+    padding: 3px 8px;
+    border-radius: 99px;
+    border: 1px solid var(--border-strong);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .candidate-btn.voted .candidate-vote-badge { opacity: 1; }
+
+  /* Results bar */
+  .result-item {
+    margin-bottom: 10px;
+  }
+  .result-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 5px;
+  }
+  .result-name { font-size: 0.88rem; font-weight: 600; color: var(--text-primary); }
+  .result-count { font-size: 0.82rem; color: var(--text-muted); font-weight: 500; }
+  .result-bar-track {
+    height: 8px;
+    background: var(--green-100);
+    border-radius: 99px;
+    overflow: hidden;
+  }
+  .result-bar-fill {
+    height: 100%;
+    border-radius: 99px;
+    background: linear-gradient(90deg, var(--primary), var(--accent));
+    transition: width 0.6s cubic-bezier(0.22,1,0.36,1);
+    min-width: 0;
+  }
+  .result-bar-fill.leader {
+    background: linear-gradient(90deg, var(--primary-dark), var(--primary));
+  }
+
+  .result-total {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1.5px solid var(--border);
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .poll-card-footer {
+    padding: 12px 24px;
+    background: var(--surface-3);
+    border-top: 1.5px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .poll-footer-left {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    display: flex; align-items: center; gap: 6px;
+  }
+
+  .poll-footer-actions { display: flex; gap: 6px; }
+
+  /* Admin section */
+  .admin-section {
+    margin-top: 28px;
+    background: white;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 20px 24px;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .admin-section-title {
+    font-weight: 700;
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 14px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .admin-section-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .members-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .member-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 9px 12px;
+    border-radius: var(--radius-sm);
+    background: var(--green-50);
+    transition: background 0.15s;
+  }
+  .member-item:hover { background: var(--green-100); }
+
+  .member-left {
+    display: flex; align-items: center; gap: 10px;
+  }
+  .member-avatar {
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: white;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .member-avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .member-name { font-size: 0.85rem; font-weight: 600; color: var(--text-primary); }
+  .member-role {
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 99px;
+  }
+  .member-role.owner { background: #fef3c7; color: #92600a; }
+  .member-role.admin { background: var(--green-100); color: var(--primary-dark); }
+
+  .invite-code-display {
+    margin-top: 14px;
+    padding: 12px 16px;
+    background: var(--green-50);
+    border: 1.5px dashed var(--border-strong);
+    border-radius: var(--radius-sm);
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px;
+  }
+  .invite-code-label { font-size: 0.78rem; color: var(--text-muted); font-weight: 500; }
+  .invite-code-value {
+    font-family: monospace;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--primary-dark);
+    letter-spacing: 0.2em;
+  }
+  .btn-copy {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--primary-dark);
+    background: white;
+    border: 1.5px solid var(--border-strong);
+    border-radius: 6px;
+    padding: 5px 12px;
+    cursor: pointer;
+    transition: all 0.18s;
+    font-family: 'Noto Sans KR', sans-serif;
+  }
+  .btn-copy:hover { background: var(--green-100); border-color: var(--primary); }
+
+  /* ══════════════════════════════════════════
+     MODALS
+  ══════════════════════════════════════════ */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(10,30,18,0.45);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    z-index: 1000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    animation: fadeOverlay 0.2s ease;
+  }
+  .modal-overlay.open { display: flex; }
+  @keyframes fadeOverlay { from { opacity: 0; } to { opacity: 1; } }
+
+  .modal {
+    background: white;
+    border-radius: var(--radius-xl);
+    width: 100%;
+    max-width: 520px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: var(--shadow-xl);
+    animation: modalIn 0.3s cubic-bezier(0.22,1,0.36,1);
+  }
+  @keyframes modalIn {
+    from { opacity: 0; transform: scale(0.93) translateY(20px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+  }
+
+  .modal-header {
+    padding: 24px 28px 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .modal-title {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: var(--text-primary);
+  }
+  .modal-subtitle {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    margin-top: 3px;
+  }
+
+  .modal-close {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    background: var(--green-50);
+    border: 1.5px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.18s;
+  }
+  .modal-close:hover { background: var(--green-100); border-color: var(--border-strong); }
+  .modal-close svg { width: 14px; height: 14px; }
+
+  .modal-body { padding: 0 28px 28px; }
+
+  /* Form elements */
+  .form-group { margin-bottom: 18px; }
+  .form-label {
+    display: block;
+    font-size: 0.83rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 7px;
+  }
+  .form-label span { color: var(--primary); }
+
+  .form-input {
+    width: 100%;
+    padding: 11px 14px;
+    border: 1.5px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    background: white;
+    font-family: 'Noto Sans KR', sans-serif;
+    transition: all 0.18s;
+    outline: none;
+  }
+  .form-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(46,204,113,0.12); }
+  .form-input::placeholder { color: var(--text-muted); }
+
+  textarea.form-input { resize: vertical; min-height: 70px; }
+
+  /* Toggle group */
+  .toggle-group {
+    display: flex;
+    border: 1.5px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+  }
+
+  .toggle-option {
+    flex: 1;
+    position: relative;
+  }
+  .toggle-option input { position: absolute; opacity: 0; width: 0; height: 0; }
+  .toggle-option label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 10px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: white;
+    transition: all 0.18s;
+    user-select: none;
+  }
+  .toggle-option:not(:last-child) label { border-right: 1.5px solid var(--border-strong); }
+  .toggle-option input:checked + label {
+    background: var(--green-50);
+    color: var(--primary-dark);
+  }
+  .toggle-option label svg { width: 15px; height: 15px; }
+
+  /* Dynamic candidates */
+  .candidates-input-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .candidate-input-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    animation: slideIn 0.2s ease;
+  }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(-8px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  .candidate-input-row .form-input { flex: 1; }
+
+  .btn-remove-candidate {
+    width: 34px; height: 34px;
+    border-radius: 8px;
+    background: #fef2f2;
+    border: 1.5px solid #fecaca;
+    color: #e74c3c;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: all 0.18s;
+    flex-shrink: 0;
+  }
+  .btn-remove-candidate:hover { background: #fee2e2; }
+  .btn-remove-candidate svg { width: 14px; height: 14px; }
+
+  .btn-add-candidate {
+    display: flex; align-items: center; gap: 7px;
+    padding: 9px 14px;
+    background: var(--green-50);
+    border: 1.5px dashed var(--border-strong);
+    border-radius: var(--radius-sm);
+    font-size: 0.83rem;
+    font-weight: 600;
+    color: var(--primary-dark);
+    cursor: pointer;
+    width: 100%;
+    justify-content: center;
+    transition: all 0.18s;
+    font-family: 'Noto Sans KR', sans-serif;
+    margin-top: 4px;
+  }
+  .btn-add-candidate:hover { background: var(--green-100); border-color: var(--primary); }
+  .btn-add-candidate svg { width: 14px; height: 14px; }
+
+  .modal-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 24px;
+  }
+  .modal-actions .btn-primary { flex: 1; justify-content: center; }
+  .modal-actions .btn-secondary { justify-content: center; }
+
+  /* ── TOAST ── */
+  .toast-container {
+    position: fixed;
+    bottom: 24px; left: 50%;
+    transform: translateX(-50%);
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    pointer-events: none;
+  }
+
+  .toast {
+    background: var(--text-primary);
+    color: white;
+    padding: 11px 20px;
+    border-radius: var(--radius);
+    font-size: 0.85rem;
+    font-weight: 500;
+    box-shadow: var(--shadow-lg);
+    animation: toastIn 0.3s cubic-bezier(0.22,1,0.36,1);
+    display: flex; align-items: center; gap: 8px;
+    white-space: nowrap;
+    max-width: 90vw;
+  }
+  .toast.success { background: var(--primary-dark); }
+  .toast.error { background: #e74c3c; }
+
+  @keyframes toastIn {
+    from { opacity: 0; transform: translateY(12px) scale(0.95); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes toastOut {
+    from { opacity: 1; transform: translateY(0) scale(1); }
+    to   { opacity: 0; transform: translateY(-8px) scale(0.95); }
+  }
+
+  /* ── LOADING ── */
+  .spinner {
+    width: 20px; height: 20px;
+    border: 2.5px solid rgba(255,255,255,0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    display: none;
+  }
+  .spinner.visible { display: block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loading-overlay {
+    position: fixed; inset: 0;
+    background: rgba(255,255,255,0.85);
+    backdrop-filter: blur(4px);
+    z-index: 500;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .loading-overlay.visible { display: flex; }
+  .loading-overlay .big-spinner {
+    width: 44px; height: 44px;
+    border: 4px solid var(--green-200);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+  }
+  .loading-overlay p { font-size: 0.9rem; color: var(--text-muted); font-weight: 500; }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 640px) {
+    .app-header { padding: 0 16px; }
+    .main-content { padding: 20px 16px 50px; }
+    .landing-card { padding: 36px 24px; }
+    .landing-title { font-size: 1.6rem; }
+    .rooms-grid { grid-template-columns: 1fr; }
+    .room-header { flex-direction: column; align-items: flex-start; }
+    .user-name { display: none; }
+    .modal { border-radius: var(--radius-lg); }
+    .modal-header, .modal-body { padding-left: 20px; padding-right: 20px; }
+    .poll-card-footer { flex-direction: column; align-items: flex-start; }
+    .btn-invite-code span { display: none; }
+    .modal-actions { flex-direction: column; }
+    .header-right { gap: 6px; }
+  }
+
+  @media (min-width: 768px) {
+    .polls-grid { grid-template-columns: repeat(auto-fill, minmax(480px, 1fr)); }
+  }
+
+  /* ── UTIL ── */
+  .hidden { display: none !important; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════ LOADING ══════════════════ -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="big-spinner"></div>
+  <p>잠시만 기다려 주세요...</p>
+</div>
+
+<!-- ══════════════════ LANDING ══════════════════ -->
+<div id="landing">
+  <div class="landing-card">
+    <div class="landing-logo">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+      </svg>
+    </div>
+    <h1 class="landing-title">더클래용 <span>투표</span></h1>
+    <p class="landing-sub">학급 선거, 각종 투표를 실시간으로.<br>공정하고 투명한 온라인 투표 시스템.</p>
+    <button class="btn-google" id="loginBtn">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+      </svg>
+      Google 계정으로 로그인
+    </button>
+    <div class="landing-badge">Firebase Auth로 안전하게 보호됩니다</div>
+  </div>
+</div>
+
+<!-- ══════════════════ APP ══════════════════ -->
+<div id="app">
+
+  <!-- HEADER -->
+  <header class="app-header">
+    <div class="header-logo" id="headerLogo">
+      <div class="header-logo-icon">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+        </svg>
+      </div>
+      <span class="header-logo-text">더클래용 <span>투표</span></span>
+    </div>
+
+    <div class="header-right">
+      <button class="btn-invite-code" id="btnInviteCode">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M15 7h3a5 5 0 010 10h-3m-6 0H6A5 5 0 016 7h3M8 12h8"/>
+        </svg>
+        <span>초대 코드로 입장</span>
+      </button>
+
+      <div class="user-chip" id="userChip">
+        <div class="user-avatar" id="userAvatarHeader"></div>
+        <span class="user-name" id="userNameHeader"></span>
+        <div class="user-dropdown">
+          <div class="dropdown-item" id="btnGoHome">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            홈으로
+          </div>
+          <div class="dropdown-item danger" id="btnLogout">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+            로그아웃
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN -->
+  <main class="main-content">
+
+    <!-- HOME VIEW -->
+    <div class="view active" id="viewHome">
+      <div class="page-header">
+        <h1 class="page-title">투표 방 목록</h1>
+        <p class="page-sub">참여하거나 직접 투표를 만들어보세요.</p>
+      </div>
+
+      <div class="rooms-grid" id="roomsGrid">
+        <!-- create card -->
+        <div class="room-card-create" id="btnCreateRoom">
+          <div class="create-icon">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 5v14M5 12h14"/></svg>
+          </div>
+          <span>새 투표 방 만들기</span>
+        </div>
+        <!-- rooms will be injected here -->
+      </div>
+    </div>
+
+    <!-- ROOM VIEW -->
+    <div class="view" id="viewRoom">
+      <div class="room-header">
+        <div class="room-header-left">
+          <button class="btn-back" id="btnBackHome">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+            목록
+          </button>
+          <div class="room-title-group">
+            <h2 id="roomViewTitle">방 이름</h2>
+            <p id="roomViewMeta"></p>
+          </div>
+        </div>
+        <div class="room-header-actions" id="roomHeaderActions">
+          <button class="btn-primary hidden" id="btnCreatePoll">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+            투표지 만들기
+          </button>
+          <button class="btn-secondary hidden" id="btnDownloadCSV">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            CSV 다운로드
+          </button>
+        </div>
+      </div>
+
+      <div class="polls-grid" id="pollsGrid">
+        <div class="empty-state">
+          <div class="empty-state-icon">🗳️</div>
+          <p>아직 생성된 투표가 없습니다.</p>
+        </div>
+      </div>
+
+      <div class="admin-section hidden" id="adminSection">
+        <div class="admin-section-title">방 관리</div>
+        <div class="members-list" id="membersList"></div>
+        <div class="invite-code-display hidden" id="inviteCodeDisplay">
+          <div>
+            <div class="invite-code-label">초대 코드</div>
+            <div class="invite-code-value" id="inviteCodeValue"></div>
+          </div>
+          <button class="btn-copy" id="btnCopyCode">복사</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ══════════════════ MODALS ══════════════════ -->
+
+<!-- Create Room Modal -->
+<div class="modal-overlay" id="modalCreateRoom">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">새 투표 방 만들기</div>
+        <div class="modal-subtitle">투표를 진행할 공간을 만들어보세요.</div>
+      </div>
+      <button class="modal-close" data-close="modalCreateRoom">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label" for="roomName">방 이름 <span>*</span></label>
+        <input type="text" class="form-input" id="roomName" placeholder="예: 1반 반장 선거" maxlength="40">
+      </div>
+      <div class="form-group">
+        <label class="form-label">공개 여부</label>
+        <div class="toggle-group">
+          <div class="toggle-option">
+            <input type="radio" name="roomVisibility" id="visPublic" value="public" checked>
+            <label for="visPublic">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+              공개
+            </label>
+          </div>
+          <div class="toggle-option">
+            <input type="radio" name="roomVisibility" id="visPrivate" value="private">
+            <label for="visPrivate">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+              비공개 (초대 코드)
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">결과 공개 범위</label>
+        <div class="toggle-group">
+          <div class="toggle-option">
+            <input type="radio" name="resultVisibility" id="resAll" value="all" checked>
+            <label for="resAll">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              모두 공개
+            </label>
+          </div>
+          <div class="toggle-option">
+            <input type="radio" name="resultVisibility" id="resAdmin" value="admin">
+            <label for="resAdmin">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              관리자만
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" data-close="modalCreateRoom">취소</button>
+        <button class="btn-primary" id="btnSubmitRoom">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          방 만들기
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Invite Code Modal -->
+<div class="modal-overlay" id="modalInviteCode">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">초대 코드로 입장</div>
+        <div class="modal-subtitle">비공개 방의 6자리 초대 코드를 입력하세요.</div>
+      </div>
+      <button class="modal-close" data-close="modalInviteCode">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label" for="inviteCodeInput">초대 코드 <span>*</span></label>
+        <input type="text" class="form-input" id="inviteCodeInput" placeholder="ABC123" maxlength="6"
+               style="text-transform:uppercase; letter-spacing:0.2em; font-size:1.1rem; font-weight:700; text-align:center;">
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" data-close="modalInviteCode">취소</button>
+        <button class="btn-primary" id="btnSubmitInviteCode">
+          입장하기
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Create Poll Modal -->
+<div class="modal-overlay" id="modalCreatePoll">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">투표지 만들기</div>
+        <div class="modal-subtitle">제목과 후보자를 입력하세요.</div>
+      </div>
+      <button class="modal-close" data-close="modalCreatePoll">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label" for="pollTitle">투표 제목 <span>*</span></label>
+        <input type="text" class="form-input" id="pollTitle" placeholder="예: 반장 선거" maxlength="50">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="pollDesc">설명 (선택)</label>
+        <textarea class="form-input" id="pollDesc" placeholder="투표에 대한 간단한 설명을 입력하세요."></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">후보자 목록 <span>*</span></label>
+        <div class="candidates-input-list" id="candidatesInputList">
+          <div class="candidate-input-row">
+            <input type="text" class="form-input" placeholder="후보자 이름 1" maxlength="20">
+          </div>
+          <div class="candidate-input-row">
+            <input type="text" class="form-input" placeholder="후보자 이름 2" maxlength="20">
+          </div>
+        </div>
+        <button class="btn-add-candidate" id="btnAddCandidate">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          후보자 추가
+        </button>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" data-close="modalCreatePoll">취소</button>
+        <button class="btn-primary" id="btnSubmitPoll">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          투표지 생성
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Manage Member Modal -->
+<div class="modal-overlay" id="modalManageMember">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">권한 설정</div>
+        <div class="modal-subtitle" id="manageMemberName">멤버 이름</div>
+      </div>
+      <button class="modal-close" data-close="modalManageMember">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-actions">
+        <button class="btn-secondary" data-close="modalManageMember">취소</button>
+        <button class="btn-primary" id="btnMakeAdmin">관리자로 임명</button>
+        <button class="btn-danger" id="btnRemoveAdmin">관리자 해제</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- ═══════════════════════════════════════════════════
+     FIREBASE SDKs (v9 compat mode)
+═══════════════════════════════════════════════════ -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<script>
+/* ══════════════════════════════════════════════════════
+   🔥 FIREBASE CONFIG — 아래 값을 본인 프로젝트 값으로 교체하세요!
+══════════════════════════════════════════════════════ */
+const firebaseConfig = {
+  apiKey: "AIzaSyC70hfnJtVpwWp-D6Qb4MwnhmwRFG5XDgw",
+  authDomain: "tuppor.firebaseapp.com",
+  databaseURL: "https://tuppor-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "tuppor",
+  storageBucket: "tuppor.firebasestorage.app",
+  messagingSenderId: "807844660512",
+  appId: "1:807844660512:web:ee3bb147781e2d072b8345"
+};
+
+// Initialize Firebase
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.database();
+
+/* ══════════════════════════════════════════════════════
+   STATE
+══════════════════════════════════════════════════════ */
+let currentUser = null;
+let currentRoomId = null;
+let currentRoomData = null;
+let roomsListener = null;
+let pollsListener = null;
+let membersListener = null;
+let selectedMemberId = null;
+
+/* ══════════════════════════════════════════════════════
+   HELPERS
+══════════════════════════════════════════════════════ */
+function showLoading(v) {
+  document.getElementById('loadingOverlay').classList.toggle('visible', v);
+}
+
+function showToast(msg, type = '') {
+  const c = document.getElementById('toastContainer');
+  const t = document.createElement('div');
+  t.className = 'toast' + (type ? ' ' + type : '');
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => {
+    t.style.animation = 'toastOut 0.3s ease forwards';
+    setTimeout(() => t.remove(), 300);
+  }, 2600);
+}
+
+function openModal(id) {
+  document.getElementById(id).classList.add('open');
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+
+function generateCode(len = 6) {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  return Array.from({length: len}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+}
+
+function avatarInitial(name, photoURL) {
+  if (photoURL) return `<img src="${photoURL}" alt="">`;
+  const n = name || '?';
+  return n.charAt(0).toUpperCase();
+}
+
+function isOwner(room, uid) {
+  return room && room.ownerUid === uid;
+}
+function isAdmin(room, uid) {
+  return room && room.admins && room.admins[uid];
+}
+function isOwnerOrAdmin(room, uid) {
+  return isOwner(room, uid) || isAdmin(room, uid);
+}
+
+function switchView(id) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+/* ══════════════════════════════════════════════════════
+   AUTH
+══════════════════════════════════════════════════════ */
+document.getElementById('loginBtn').addEventListener('click', async () => {
+  showLoading(true);
+  try {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    await auth.signInWithPopup(provider);
+  } catch (e) {
+    showToast('로그인에 실패했습니다: ' + e.message, 'error');
+    showLoading(false);
+  }
+});
+
+auth.onAuthStateChanged(user => {
+  showLoading(false);
+  currentUser = user;
+  if (user) {
+    document.getElementById('landing').style.display = 'none';
+    document.getElementById('app').classList.add('visible');
+    setupUserUI(user);
+    loadRooms();
+    switchView('viewHome');
+  } else {
+    document.getElementById('landing').style.display = 'flex';
+    document.getElementById('app').classList.remove('visible');
+    teardownListeners();
+  }
+});
+
+function setupUserUI(user) {
+  const avatarEl = document.getElementById('userAvatarHeader');
+  const nameEl = document.getElementById('userNameHeader');
+  avatarEl.innerHTML = user.photoURL
+    ? `<img src="${user.photoURL}" alt="">`
+    : (user.displayName || 'U').charAt(0).toUpperCase();
+  nameEl.textContent = user.displayName || user.email || '사용자';
+}
+
+document.getElementById('btnLogout').addEventListener('click', async () => {
+  await auth.signOut();
+  document.getElementById('userChip').classList.remove('open');
+  showToast('로그아웃 되었습니다.');
+});
+
+document.getElementById('btnGoHome').addEventListener('click', () => {
+  document.getElementById('userChip').classList.remove('open');
+  goHome();
+});
+
+document.getElementById('userChip').addEventListener('click', e => {
+  if (!e.target.closest('.dropdown-item')) {
+    document.getElementById('userChip').classList.toggle('open');
+  }
+});
+document.addEventListener('click', e => {
+  if (!e.target.closest('#userChip')) {
+    document.getElementById('userChip').classList.remove('open');
+  }
+});
+
+/* ══════════════════════════════════════════════════════
+   ROOMS
+══════════════════════════════════════════════════════ */
+function loadRooms() {
+  if (roomsListener) db.ref('rooms').off('value', roomsListener);
+  const grid = document.getElementById('roomsGrid');
+
+  roomsListener = db.ref('rooms').orderByChild('createdAt').on('value', snap => {
+    // Remove all except first card (create button)
+    const cards = grid.querySelectorAll('.room-card');
+    cards.forEach(c => c.remove());
+    const emptyEl = grid.querySelector('.empty-state');
+    if (emptyEl) emptyEl.remove();
+
+    const rooms = [];
+    snap.forEach(child => {
+      rooms.push({id: child.key, ...child.val()});
+    });
+
+    // filter: show public rooms + private rooms the user is a member of
+    const visible = rooms.filter(r => {
+      if (!r.isPrivate) return true;
+      if (!currentUser) return false;
+      return r.members && r.members[currentUser.uid];
+    });
+
+    if (visible.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'empty-state';
+      empty.innerHTML = `<div class="empty-state-icon">🗳️</div><p>아직 공개된 투표 방이 없습니다. 첫 번째 방을 만들어보세요!</p>`;
+      grid.appendChild(empty);
+      return;
+    }
+
+    visible.reverse().forEach(room => {
+      const card = createRoomCard(room);
+      grid.appendChild(card);
+    });
+  });
+}
+
+function createRoomCard(room) {
+  const emojis = ['🗳️','📋','🏫','📣','🎓','🌿','✅'];
+  const emoji = emojis[Math.abs(room.id.charCodeAt(0)) % emojis.length];
+
+  const card = document.createElement('div');
+  card.className = 'room-card';
+  card.innerHTML = `
+    <div class="room-card-top">
+      <div class="room-card-icon">${emoji}</div>
+      <span class="room-badge ${room.isPrivate ? 'private' : 'public'}">${room.isPrivate ? '🔒 비공개' : '🌐 공개'}</span>
+    </div>
+    <div class="room-card-name">${escapeHtml(room.name)}</div>
+    <div class="room-card-meta">
+      <span class="room-card-meta-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+        ${Object.keys(room.members || {}).length}명 참여
+      </span>
+      <span class="room-card-meta-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        ${Object.keys(room.polls || {}).length}개 투표
+      </span>
+    </div>
+  `;
+  card.addEventListener('click', () => enterRoom(room.id));
+  return card;
+}
+
+/* ══════════════════════════════════════════════════════
+   CREATE ROOM
+══════════════════════════════════════════════════════ */
+document.getElementById('btnCreateRoom').addEventListener('click', () => {
+  document.getElementById('roomName').value = '';
+  document.getElementById('visPublic').checked = true;
+  document.getElementById('resAll').checked = true;
+  openModal('modalCreateRoom');
+});
+
+document.getElementById('btnSubmitRoom').addEventListener('click', async () => {
+  const name = document.getElementById('roomName').value.trim();
+  if (!name) { showToast('방 이름을 입력해주세요.', 'error'); return; }
+
+  const isPrivate = document.getElementById('visPrivate').checked;
+  const resultVisibility = document.getElementById('resAdmin').checked ? 'admin' : 'all';
+  const inviteCode = isPrivate ? generateCode() : null;
+
+  showLoading(true);
+  try {
+    const roomRef = db.ref('rooms').push();
+    const uid = currentUser.uid;
+    await roomRef.set({
+      name,
+      isPrivate,
+      resultVisibility,
+      inviteCode: inviteCode || null,
+      ownerUid: uid,
+      createdAt: firebase.database.ServerValue.TIMESTAMP,
+      members: {
+        [uid]: {
+          name: currentUser.displayName || '',
+          photoURL: currentUser.photoURL || '',
+          role: 'owner',
+          joinedAt: firebase.database.ServerValue.TIMESTAMP
+        }
+      }
+    });
+    closeModal('modalCreateRoom');
+    showToast('방이 생성되었습니다!', 'success');
+    enterRoom(roomRef.key);
+  } catch (e) {
+    showToast('방 생성에 실패했습니다.', 'error');
+    console.error(e);
+  }
+  showLoading(false);
+});
+
+/* ══════════════════════════════════════════════════════
+   INVITE CODE
+══════════════════════════════════════════════════════ */
+document.getElementById('btnInviteCode').addEventListener('click', () => {
+  document.getElementById('inviteCodeInput').value = '';
+  openModal('modalInviteCode');
+});
+
+document.getElementById('inviteCodeInput').addEventListener('input', e => {
+  e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+});
+
+document.getElementById('btnSubmitInviteCode').addEventListener('click', async () => {
+  const code = document.getElementById('inviteCodeInput').value.trim().toUpperCase();
+  if (code.length !== 6) { showToast('6자리 코드를 입력해주세요.', 'error'); return; }
+
+  showLoading(true);
+  try {
+    const snap = await db.ref('rooms').orderByChild('inviteCode').equalTo(code).once('value');
+    if (!snap.exists()) {
+      showToast('유효하지 않은 초대 코드입니다.', 'error');
+      showLoading(false);
+      return;
+    }
+    const roomId = Object.keys(snap.val())[0];
+    closeModal('modalInviteCode');
+    enterRoom(roomId);
+  } catch (e) {
+    showToast('오류가 발생했습니다.', 'error');
+    console.error(e);
+  }
+  showLoading(false);
+});
+
+/* ══════════════════════════════════════════════════════
+   ENTER ROOM
+══════════════════════════════════════════════════════ */
+async function enterRoom(roomId) {
+  showLoading(true);
+  teardownRoomListeners();
+  currentRoomId = roomId;
+
+  // Join as member
+  const uid = currentUser.uid;
+  await db.ref(`rooms/${roomId}/members/${uid}`).transaction(existing => {
+    if (existing) return existing; // already member
+    return {
+      name: currentUser.displayName || '',
+      photoURL: currentUser.photoURL || '',
+      role: 'member',
+      joinedAt: firebase.database.ServerValue.TIMESTAMP
+    };
+  });
+
+  // Load room data once to check access
+  const snap = await db.ref(`rooms/${roomId}`).once('value');
+  if (!snap.exists()) {
+    showToast('방을 찾을 수 없습니다.', 'error');
+    showLoading(false);
+    return;
+  }
+
+  currentRoomData = {id: roomId, ...snap.val()};
+  switchView('viewRoom');
+  setupRoomView(roomId);
+  showLoading(false);
+}
+
+function setupRoomView(roomId) {
+  // Real-time room listener
+  pollsListener = db.ref(`rooms/${roomId}`).on('value', snap => {
+    if (!snap.exists()) return;
+    currentRoomData = {id: roomId, ...snap.val()};
+    renderRoomView(currentRoomData);
+  });
+}
+
+function renderRoomView(room) {
+  const uid = currentUser.uid;
+  const owner = isOwner(room, uid);
+  const admin = isAdmin(room, uid);
+  const isPrivileged = owner || admin;
+
+  // Header
+  document.getElementById('roomViewTitle').textContent = room.name;
+  document.getElementById('roomViewMeta').textContent =
+    (room.isPrivate ? '🔒 비공개 방' : '🌐 공개 방') +
+    ` · ${Object.keys(room.members || {}).length}명 참여`;
+
+  // Buttons
+  document.getElementById('btnCreatePoll').classList.toggle('hidden', !isPrivileged);
+  document.getElementById('btnDownloadCSV').classList.toggle('hidden', !isPrivileged);
+
+  // Admin section
+  const adminSec = document.getElementById('adminSection');
+  adminSec.classList.toggle('hidden', !isPrivileged);
+
+  if (isPrivileged) {
+    renderMembers(room);
+    if (room.isPrivate && room.inviteCode) {
+      document.getElementById('inviteCodeDisplay').classList.remove('hidden');
+      document.getElementById('inviteCodeValue').textContent = room.inviteCode;
+    }
+  }
+
+  // Polls
+  renderPolls(room);
+}
+
+/* ══════════════════════════════════════════════════════
+   MEMBERS
+══════════════════════════════════════════════════════ */
+function renderMembers(room) {
+  const list = document.getElementById('membersList');
+  list.innerHTML = '';
+  const members = room.members || {};
+  const uid = currentUser.uid;
+  const owner = isOwner(room, uid);
+
+  Object.entries(members).forEach(([memberId, member]) => {
+    const isOwnerMember = room.ownerUid === memberId;
+    const isAdminMember = room.admins && room.admins[memberId];
+
+    const item = document.createElement('div');
+    item.className = 'member-item';
+    item.innerHTML = `
+      <div class="member-left">
+        <div class="member-avatar">${member.photoURL ? `<img src="${member.photoURL}" alt="">` : (member.name || '?').charAt(0)}</div>
+        <span class="member-name">${escapeHtml(member.name || '알 수 없음')}</span>
+        ${isOwnerMember ? '<span class="member-role owner">방장</span>' : (isAdminMember ? '<span class="member-role admin">관리자</span>' : '')}
+      </div>
+      ${owner && !isOwnerMember ? `<button class="btn-secondary" style="padding:5px 10px;font-size:0.78rem" data-memberid="${memberId}" data-membername="${escapeHtml(member.name || '멤버')}">권한</button>` : ''}
+    `;
+    list.appendChild(item);
+  });
+
+  // manage member buttons
+  list.querySelectorAll('[data-memberid]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      selectedMemberId = btn.dataset.memberid;
+      document.getElementById('manageMemberName').textContent = btn.dataset.membername;
+      openModal('modalManageMember');
+    });
+  });
+}
+
+document.getElementById('btnMakeAdmin').addEventListener('click', async () => {
+  if (!selectedMemberId) return;
+  await db.ref(`rooms/${currentRoomId}/admins/${selectedMemberId}`).set(true);
+  closeModal('modalManageMember');
+  showToast('관리자로 임명했습니다.', 'success');
+});
+
+document.getElementById('btnRemoveAdmin').addEventListener('click', async () => {
+  if (!selectedMemberId) return;
+  await db.ref(`rooms/${currentRoomId}/admins/${selectedMemberId}`).remove();
+  closeModal('modalManageMember');
+  showToast('관리자 권한을 해제했습니다.');
+});
+
+document.getElementById('btnCopyCode').addEventListener('click', () => {
+  const code = document.getElementById('inviteCodeValue').textContent;
+  navigator.clipboard.writeText(code).then(() => showToast('초대 코드를 복사했습니다!', 'success'));
+});
+
+/* ══════════════════════════════════════════════════════
+   CREATE POLL
+══════════════════════════════════════════════════════ */
+document.getElementById('btnCreatePoll').addEventListener('click', () => {
+  document.getElementById('pollTitle').value = '';
+  document.getElementById('pollDesc').value = '';
+  const list = document.getElementById('candidatesInputList');
+  list.innerHTML = `
+    <div class="candidate-input-row"><input type="text" class="form-input" placeholder="후보자 이름 1" maxlength="20"></div>
+    <div class="candidate-input-row"><input type="text" class="form-input" placeholder="후보자 이름 2" maxlength="20"></div>
+  `;
+  openModal('modalCreatePoll');
+});
+
+document.getElementById('btnAddCandidate').addEventListener('click', () => {
+  const list = document.getElementById('candidatesInputList');
+  const count = list.children.length + 1;
+  const row = document.createElement('div');
+  row.className = 'candidate-input-row';
+  row.innerHTML = `
+    <input type="text" class="form-input" placeholder="후보자 이름 ${count}" maxlength="20">
+    <button class="btn-remove-candidate" title="삭제">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    </button>
+  `;
+  row.querySelector('.btn-remove-candidate').addEventListener('click', () => row.remove());
+  list.appendChild(row);
+});
+
+document.getElementById('btnSubmitPoll').addEventListener('click', async () => {
+  const title = document.getElementById('pollTitle').value.trim();
+  if (!title) { showToast('투표 제목을 입력해주세요.', 'error'); return; }
+
+  const inputs = document.querySelectorAll('#candidatesInputList input');
+  const candidates = [];
+  inputs.forEach(inp => {
+    const v = inp.value.trim();
+    if (v) candidates.push(v);
+  });
+  if (candidates.length < 2) { showToast('후보자를 2명 이상 입력해주세요.', 'error'); return; }
+
+  showLoading(true);
+  try {
+    const pollRef = db.ref(`rooms/${currentRoomId}/polls`).push();
+    const candidatesObj = {};
+    candidates.forEach((name, i) => { candidatesObj[`c${i}`] = { name, voteCount: 0 }; });
+
+    await pollRef.set({
+      title,
+      description: document.getElementById('pollDesc').value.trim(),
+      candidates: candidatesObj,
+      status: 'active',
+      createdAt: firebase.database.ServerValue.TIMESTAMP,
+      createdBy: currentUser.uid
+    });
+    closeModal('modalCreatePoll');
+    showToast('투표지가 생성되었습니다!', 'success');
+  } catch (e) {
+    showToast('투표 생성에 실패했습니다.', 'error');
+    console.error(e);
+  }
+  showLoading(false);
+});
+
+/* ══════════════════════════════════════════════════════
+   RENDER POLLS
+══════════════════════════════════════════════════════ */
+function renderPolls(room) {
+  const grid = document.getElementById('pollsGrid');
+  grid.innerHTML = '';
+
+  const polls = room.polls || {};
+  const pollEntries = Object.entries(polls).reverse();
+  const uid = currentUser.uid;
+  const privileged = isOwnerOrAdmin(room, uid);
+
+  if (pollEntries.length === 0) {
+    grid.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">🗳️</div>
+        <p>아직 투표지가 없습니다. 투표지를 만들어보세요!</p>
+      </div>`;
+    return;
+  }
+
+  pollEntries.forEach(([pollId, poll]) => {
+    const card = createPollCard(pollId, poll, room, uid, privileged);
+    grid.appendChild(card);
+  });
+}
+
+function createPollCard(pollId, poll, room, uid, privileged) {
+  const card = document.createElement('div');
+  card.className = 'poll-card';
+
+  const isClosed = poll.status === 'closed';
+  const votes = poll.votes || {};
+  const hasVoted = !!votes[uid];
+  const myVote = hasVoted ? votes[uid].candidateId : null;
+
+  const candidates = poll.candidates || {};
+  const candidateEntries = Object.entries(candidates);
+
+  // Count votes
+  const voteCounts = {};
+  candidateEntries.forEach(([cid]) => voteCounts[cid] = 0);
+  Object.values(votes).forEach(v => {
+    if (voteCounts[v.candidateId] !== undefined) voteCounts[v.candidateId]++;
+  });
+
+  const totalVotes = Object.values(voteCounts).reduce((a, b) => a + b, 0);
+  const maxVotes = Math.max(...Object.values(voteCounts), 1);
+
+  // Show results?
+  const showResults = (room.resultVisibility === 'all' && (hasVoted || isClosed)) ||
+                      (room.resultVisibility !== 'all' && privileged);
+
+  // Header
+  card.innerHTML = `
+    <div class="poll-card-header">
+      <div class="poll-card-title-group">
+        <h3>${escapeHtml(poll.title)}</h3>
+        ${poll.description ? `<p>${escapeHtml(poll.description)}</p>` : ''}
+      </div>
+      <span class="poll-status ${isClosed ? 'closed' : 'active'}">${isClosed ? '⏹ 종료' : '🟢 진행중'}</span>
+    </div>
+    <div class="poll-card-body"></div>
+    <div class="poll-card-footer">
+      <div class="poll-footer-left">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+        ${totalVotes}명 투표 참여
+      </div>
+      <div class="poll-footer-actions" id="pollActions-${pollId}"></div>
+    </div>
+  `;
+
+  const body = card.querySelector('.poll-card-body');
+  const actionsEl = card.querySelector(`#pollActions-${pollId}`);
+
+  // Voting UI
+  if (!isClosed && !hasVoted) {
+    const list = document.createElement('div');
+    list.className = 'candidates-list';
+    candidateEntries.forEach(([cid, candidate], i) => {
+      const item = document.createElement('div');
+      item.className = 'candidate-item';
+      item.innerHTML = `
+        <button class="candidate-btn" data-pollid="${pollId}" data-candidateid="${cid}">
+          <span class="candidate-num">${i + 1}</span>
+          <span class="candidate-name">${escapeHtml(candidate.name)}</span>
+        </button>
+      `;
+      item.querySelector('.candidate-btn').addEventListener('click', () => castVote(pollId, cid));
+      list.appendChild(item);
+    });
+    body.appendChild(list);
+  } else if (hasVoted && !showResults) {
+    // voted but results hidden
+    const msg = document.createElement('div');
+    msg.style.cssText = 'padding:12px;text-align:center;color:var(--text-muted);font-size:0.88rem;';
+    msg.innerHTML = `✅ 투표 완료! 결과는 투표 종료 후 공개됩니다.`;
+    body.appendChild(msg);
+  }
+
+  // Results UI
+  if (showResults) {
+    const resultDiv = document.createElement('div');
+    resultDiv.innerHTML = candidateEntries.map(([cid, candidate]) => {
+      const count = voteCounts[cid];
+      const pct = totalVotes > 0 ? Math.round(count / totalVotes * 100) : 0;
+      const isLeader = count === maxVotes && count > 0;
+      const isMyVote = cid === myVote;
+      return `
+        <div class="result-item">
+          <div class="result-info">
+            <span class="result-name">${escapeHtml(candidate.name)}${isMyVote ? ' <span style="color:var(--primary);font-size:0.72rem;">(내 투표)</span>' : ''}${isLeader ? ' 🏆' : ''}</span>
+            <span class="result-count">${count}표 (${pct}%)</span>
+          </div>
+          <div class="result-bar-track">
+            <div class="result-bar-fill ${isLeader ? 'leader' : ''}" style="width:${pct}%"></div>
+          </div>
+        </div>
+      `;
+    }).join('');
+    resultDiv.innerHTML += `
+      <div class="result-total">
+        <span>총 투표 수</span>
+        <span><strong>${totalVotes}표</strong></span>
+      </div>
+    `;
+    body.appendChild(resultDiv);
+  }
+
+  // Admin poll actions
+  if (privileged && !isClosed) {
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'btn-danger';
+    closeBtn.style.padding = '6px 12px';
+    closeBtn.style.fontSize = '0.78rem';
+    closeBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><rect x="3" y="3" width="18" height="18" rx="2"/></svg> 투표 종료`;
+    closeBtn.addEventListener('click', () => closePoll(pollId));
+    actionsEl.appendChild(closeBtn);
+  }
+
+  return card;
+}
+
+/* ══════════════════════════════════════════════════════
+   VOTE
+══════════════════════════════════════════════════════ */
+async function castVote(pollId, candidateId) {
+  const uid = currentUser.uid;
+  const voteRef = db.ref(`rooms/${currentRoomId}/polls/${pollId}/votes/${uid}`);
+
+  // Check if already voted (extra safety check)
+  const existing = await voteRef.once('value');
+  if (existing.exists()) {
+    showToast('이미 투표하셨습니다.', 'error');
+    return;
+  }
+
+  showLoading(true);
+  try {
+    // Use transaction to prevent race conditions
+    await voteRef.set({
+      candidateId,
+      votedAt: firebase.database.ServerValue.TIMESTAMP,
+      voterName: currentUser.displayName || ''
+    });
+    showToast('투표가 완료되었습니다! ✅', 'success');
+  } catch (e) {
+    showToast('투표에 실패했습니다.', 'error');
+    console.error(e);
+  }
+  showLoading(false);
+}
+
+async function closePoll(pollId) {
+  if (!confirm('이 투표를 종료하시겠습니까? 종료 후에는 투표할 수 없습니다.')) return;
+  await db.ref(`rooms/${currentRoomId}/polls/${pollId}/status`).set('closed');
+  showToast('투표가 종료되었습니다.', 'success');
+}
+
+/* ══════════════════════════════════════════════════════
+   CSV DOWNLOAD
+══════════════════════════════════════════════════════ */
+document.getElementById('btnDownloadCSV').addEventListener('click', () => {
+  if (!currentRoomData) return;
+  const room = currentRoomData;
+  const polls = room.polls || {};
+
+  let csv = '\uFEFF'; // BOM for Excel
+  csv += '투표방,' + escapeCSV(room.name) + '\n\n';
+
+  Object.entries(polls).forEach(([pollId, poll]) => {
+    csv += '투표제목,' + escapeCSV(poll.title) + '\n';
+    csv += '후보자,득표수,비율\n';
+
+    const candidates = poll.candidates || {};
+    const votes = poll.votes || {};
+    const voteCounts = {};
+    Object.keys(candidates).forEach(cid => voteCounts[cid] = 0);
+    Object.values(votes).forEach(v => {
+      if (voteCounts[v.candidateId] !== undefined) voteCounts[v.candidateId]++;
+    });
+    const total = Object.values(voteCounts).reduce((a, b) => a + b, 0);
+
+    Object.entries(candidates).forEach(([cid, c]) => {
+      const count = voteCounts[cid];
+      const pct = total > 0 ? (count / total * 100).toFixed(1) + '%' : '0%';
+      csv += escapeCSV(c.name) + ',' + count + ',' + pct + '\n';
+    });
+
+    csv += '총 투표수,' + total + '\n';
+    csv += '\n유권자 UID,이름,선택 후보,투표 시각\n';
+    Object.entries(votes).forEach(([uid, v]) => {
+      const candidateName = candidates[v.candidateId]?.name || v.candidateId;
+      const time = v.votedAt ? new Date(v.votedAt).toLocaleString('ko-KR') : '';
+      csv += escapeCSV(uid) + ',' + escapeCSV(v.voterName || '') + ',' + escapeCSV(candidateName) + ',' + escapeCSV(time) + '\n';
+    });
+    csv += '\n';
+  });
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `투표결과_${room.name}_${new Date().toLocaleDateString('ko-KR')}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('CSV 파일이 다운로드되었습니다.', 'success');
+});
+
+function escapeCSV(str) {
+  if (str == null) return '';
+  str = String(str);
+  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+    return '"' + str.replace(/"/g, '""') + '"';
+  }
+  return str;
+}
+
+/* ══════════════════════════════════════════════════════
+   NAVIGATION
+══════════════════════════════════════════════════════ */
+function goHome() {
+  teardownRoomListeners();
+  currentRoomId = null;
+  currentRoomData = null;
+  switchView('viewHome');
+}
+
+document.getElementById('btnBackHome').addEventListener('click', goHome);
+document.getElementById('headerLogo').addEventListener('click', () => {
+  if (currentUser) goHome();
+});
+
+/* ══════════════════════════════════════════════════════
+   TEARDOWN
+══════════════════════════════════════════════════════ */
+function teardownRoomListeners() {
+  if (pollsListener && currentRoomId) {
+    db.ref(`rooms/${currentRoomId}`).off('value', pollsListener);
+    pollsListener = null;
+  }
+}
+
+function teardownListeners() {
+  if (roomsListener) {
+    db.ref('rooms').off('value', roomsListener);
+    roomsListener = null;
+  }
+  teardownRoomListeners();
+}
+
+/* ══════════════════════════════════════════════════════
+   MODAL CLOSE HANDLERS
+══════════════════════════════════════════════════════ */
+document.querySelectorAll('[data-close]').forEach(btn => {
+  btn.addEventListener('click', () => closeModal(btn.dataset.close));
+});
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay) overlay.classList.remove('open');
+  });
+});
+
+/* ══════════════════════════════════════════════════════
+   SECURITY HELPER
+══════════════════════════════════════════════════════ */
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.appendChild(document.createTextNode(str || ''));
+  return div.innerHTML;
+}
+</script>
+
+</body>
+</html>
